@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Extraction App</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .step-container {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+        }
+        .field-row {
+            margin-bottom: 10px;
+        }
+        #schemaPreview {
+            white-space: pre-wrap;
+            font-family: monospace;
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            display: none;
+        }
+        #uploadProgress {
+            display: none;
+        }
+        #processingProgress {
+            display: none;
+        }
+        .preview-image {
+            max-width: 150px;
+            max-height: 150px;
+            margin: 5px;
+            border: 1px solid #dee2e6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <h1 class="mb-4">Image Data Extraction App</h1>
+        
+        <div class="step-container" id="step1">
+            <h3>Step 1: Define Your Schema</h3>
+            <p>Define the data structure you want to extract from images</p>
+            
+            <div id="schemaFields">
+                <div class="field-row row">
+                    <div class="col-md-3">
+                        <input type="text" class="form-control field-name" placeholder="Field Name">
+                    </div>
+                    <div class="col-md-3">
+                        <select class="form-control field-type">
+                            <option value="str">String (str)</option>
+                            <option value="int">Integer (int)</option>
+                            <option value="float">Float (float)</option>
+                            <option value="bool">Boolean (bool)</option>
+                            <option value="List[str]">List of Strings (List[str])</option>
+                            <option value="Optional[str]">Optional String (Optional[str])</option>
+                            <option value="Dict[str, Any]">Dictionary (Dict[str, Any])</option>
+                        </select>
+                    </div>
+                    <div class="col-md-5">
+                        <input type="text" class="form-control field-desc" placeholder="Description">
+                    </div>
+                    <div class="col-md-1">
+                        <button class="btn btn-danger remove-field">X</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-3">
+                <button id="addField" class="btn btn-secondary">+ Add Field</button>
+                <button id="createSchema" class="btn btn-primary">Create Schema</button>
+            </div>
+            
+            <div class="mt-4">
+                <h5>Schema Preview:</h5>
+                <div id="schemaPreview"></div>
+            </div>
+        </div>
+        
+        <div class="step-container" id="step2" style="display:none;">
+            <h3>Step 2: Upload Images</h3>
+            <p>Upload the images you want to process</p>
+            
+            <div class="mb-3">
+                <input type="file" id="imageUpload" class="form-control" multiple accept="image/*">
+            </div>
+            
+            <div id="imagePreviewContainer" class="mb-3 d-flex flex-wrap"></div>
+            
+            <div id="uploadProgress" class="progress mb-3">
+                <div class="progress-bar" role="progressbar" style="width: 0%"></div>
+            </div>
+            
+            <button id="uploadImages" class="btn btn-primary">Upload Images</button>
+        </div>
+        
+        <div class="step-container" id="step3" style="display:none;">
+            <h3>Step 3: Process Images</h3>
+            <p>Extract structured data from your uploaded images</p>
+            
+            <div id="processingProgress" class="progress mb-3">
+                <div class="progress-bar" role="progressbar" style="width: 0%"></div>
+            </div>
+            
+            <button id="processImages" class="btn btn-primary">Process Images</button>
+        </div>
+        
+        <div class="step-container" id="step4" style="display:none;">
+            <h3>Step 4: Results</h3>
+            <div id="resultsContainer">
+                <p>Processing complete!</p>
+                <div id="downloadContainer" class="mt-3">
+                    <button id="downloadExcel" class="btn btn-success">Download Excel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        let schemaId = null;
+        let jobId = null;
+        
+        // Add new field
+        $('#addField').click(function() {
+            const newField = `
+                <div class="field-row row">
+                    <div class="col-md-3">
+                        <input type="text" class="form-control field-name" placeholder="Field Name">
+                    </div>
+                    <div class="col-md-3">
+                        <select class="form-control field-type">
+                            <option value="str">String (str)</option>
+                            <option value="int">Integer (int)</option>
+                            <option value="float">Float (float)</option>
+                            <option value="bool">Boolean (bool)</option>
+                            <option value="List[str]">List of Strings (List[str])</option>
+                            <option value="Optional[str]">Optional String (Optional[str])</option>
+                            <option value="Dict[str, Any]">Dictionary (Dict[str, Any])</option>
+                        </select>
+                    </div>
+                    <div class="col-md-5">
+                        <input type="text" class="form-control field-desc" placeholder="Description">
+                    </div>
+                    <div class="col-md-1">
+                        <button class="btn btn-danger remove-field">X</button>
+                    </div>
+                </div>
+            `;
+            $('#schemaFields').append(newField);
+        });
+        
+        // Remove field
+        $(document).on('click', '.remove-field', function() {
+            $(this).closest('.field-row').remove();
+        });
+        
+        // Create schema
+        $('#createSchema').click(function() {
+            const schema = [];
+            let valid = true;
+            
+            $('.field-row').each(function() {
+                const name = $(this).find('.field-name').val();
+                const type = $(this).find('.field-type').val();
+                const desc = $(this).find('.field-desc').val();
+                
+                if (!name || !type || !desc) {
+                    alert('Please fill in all fields');
+                    valid = false;
+                    return false;
+                }
+                
+                schema.push([name, type, desc]);
+            });
+            
+            if (!valid || schema.length === 0) {
+                alert('Please add at least one valid field');
+                return;
+            }
+            
+            // Send schema to server
+            $.ajax({
+                url: '/create_schema',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ schema: schema }),
+                success: function(response) {
+                    if (response.success) {
+                        schemaId = response.schema_id;
+                        $('#schemaPreview').text(response.code).show();
+                        $('#step1').addClass('border-success');
+                        $('#step2').show();
+                    } else {
+                        alert('Error: ' + response.error);
+                    }
+                },
+                error: function(xhr) {
+                    alert('Error: ' + xhr.responseJSON.error);
+                }
+            });
+        });
+        
+        // Display image previews
+        $('#imageUpload').change(function() {
+            const files = this.files;
+            $('#imagePreviewContainer').empty();
+            
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                if (file.type.match('image.*')) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        $('#imagePreviewContainer').append(`
+                            <div class="preview-container">
+                                <img src="${e.target.result}" class="preview-image">
+                                <div class="text-center">${file.name}</div>
+                            </div>
+                        `);
+                    };
+                    reader.readAsDataURL(file);
+                }
+            }
+        });
+        
+        // Upload images
+        $('#uploadImages').click(function() {
+            if (!schemaId) {
+                alert('Please create a schema first');
+                return;
+            }
+            
+            const files = $('#imageUpload')[0].files;
+            if (files.length === 0) {
+                alert('Please select at least one image');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('schema_id', schemaId);
+            
+            for (let i = 0; i < files.length; i++) {
+                formData.append('files[]', files[i]);
+            }
+            
+            $('#uploadProgress').show();
+            $('#uploadProgress .progress-bar').css('width', '0%');
+            
+            $.ajax({
+                url: '/upload_images',
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                xhr: function() {
+                    const xhr = new window.XMLHttpRequest();
+                    xhr.upload.addEventListener('progress', function(e) {
+                        if (e.lengthComputable) {
+                            const percent = Math.round((e.loaded / e.total) * 100);
+                            $('#uploadProgress .progress-bar').css('width', percent + '%');
+                            $('#uploadProgress .progress-bar').text(percent + '%');
+                        }
+                    });
+                    return xhr;
+                },
+                success: function(response) {
+                    if (response.success) {
+                        jobId = response.job_id;
+                        $('#uploadProgress .progress-bar').css('width', '100%');
+                        $('#uploadProgress .progress-bar').text('100%');
+                        $('#step2').addClass('border-success');
+                        $('#step3').show();
+                    } else {
+                        alert('Error: ' + response.error);
+                    }
+                },
+                error: function(xhr) {
+                    alert('Error: ' + xhr.responseJSON.error);
+                }
+            });
+        });
+        
+        // Process images
+        $('#processImages').click(function() {
+            if (!jobId) {
+                alert('Please upload images first');
+                return;
+            }
+            
+            $('#processingProgress').show();
+            $('#processingProgress .progress-bar').css('width', '50%');
+            $('#processingProgress .progress-bar').text('Processing...');
+            
+            $.ajax({
+                url: '/process_images',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ job_id: jobId }),
+                success: function(response) {
+                    if (response.success) {
+                        $('#processingProgress .progress-bar').css('width', '100%');
+                        $('#processingProgress .progress-bar').text('Complete');
+                        $('#step3').addClass('border-success');
+                        $('#step4').show();
+                    } else {
+                        alert('Error: ' + response.error);
+                    }
+                },
+                error: function(xhr) {
+                    alert('Error: ' + xhr.responseJSON.error);
+                }
+            });
+        });
+        
+        // Download Excel
+        $('#downloadExcel').click(function() {
+            if (jobId) {
+                window.location.href = `/download_excel/${jobId}`;
+                
+                // Clean up temporary files
+                $.ajax({
+                    url: '/cleanup',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ 
+                        job_id: jobId,
+                        schema_id: schemaId
+                    })
+                });
+            }
+        });
+    </script>
+</body>
+</html>
