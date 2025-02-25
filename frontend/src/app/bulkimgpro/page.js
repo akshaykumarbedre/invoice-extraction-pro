@@ -2,6 +2,7 @@
 import Navbar from '../components/Navbar';
 import { useState, useRef } from 'react';
 import { Upload, FileText, Server, Download, Trash2, Plus, Database, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import EditableResultsTable from '../components/EditableResultsTable';
 
 export default function BulkImageProcessing() {
   // State management
@@ -20,7 +21,7 @@ export default function BulkImageProcessing() {
   
   // Handle add field to schema
   const handleAddField = () => {
-    setSchema([...schema, ['', '', '']]);
+    setSchema([...schema, ['', 'str', '']]); // Default type to 'str'
   };
 
   // Handle field change in schema
@@ -280,9 +281,8 @@ export default function BulkImageProcessing() {
                 ) : (
                   <div className="mb-4">
                     <div className="grid grid-cols-12 gap-2 mb-2 text-sm font-medium text-gray-600 px-2">
-                      <div className="col-span-5">Field Name</div>
-                      <div className="col-span-3">Type</div>
-                      <div className="col-span-4">Description</div>
+                      <div className="col-span-4">Field Name</div>
+                      <div className="col-span-8">Description</div>
                     </div>
                     
                     {schema.map((field, index) => (
@@ -292,24 +292,14 @@ export default function BulkImageProcessing() {
                           placeholder="Field Name"
                           value={field[0]}
                           onChange={(e) => handleFieldChange(index, 0, e.target.value)}
-                          className="col-span-5 border border-gray-300 rounded-md p-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                          className="col-span-4 border border-gray-300 rounded-md p-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                         />
-                        <select
-                          value={field[1]}
-                          onChange={(e) => handleFieldChange(index, 1, e.target.value)}
-                          className="col-span-3 border border-gray-300 rounded-md p-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                        >
-                          <option value="">Type</option>
-                          {fieldTypes.map(type => (
-                            <option key={type} value={type}>{type}</option>
-                          ))}
-                        </select>
                         <input
                           type="text"
-                          placeholder="Description"
+                          placeholder="Description (optional)"
                           value={field[2]}
                           onChange={(e) => handleFieldChange(index, 2, e.target.value)}
-                          className="col-span-3 border border-gray-300 rounded-md p-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                          className="col-span-7 border border-gray-300 rounded-md p-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                         />
                         <button
                           onClick={() => handleDeleteField(index)}
@@ -468,28 +458,12 @@ export default function BulkImageProcessing() {
           
           {/* Results Section */}
           {results && (
-            <div className="mt-6 bg-white rounded-xl shadow-md overflow-hidden border border-gray-200">
-              <div className="bg-gray-50 p-4 border-b border-gray-200 flex items-center justify-between">
-                <div>
-                  <h2 className="font-medium text-gray-800">Results</h2>
-                  <p className="text-xs text-gray-500">Extracted data from {files.length} images</p>
-                </div>
-                <button
-                  onClick={downloadResults}
-                  className="flex items-center gap-2 bg-green-600 hover:bg-green-700 transition-colors text-white py-2 px-4 rounded-lg text-sm"
-                >
-                  <Download className="h-4 w-4" />
-                  <span>Download Excel</span>
-                </button>
-              </div>
-              
-              <div className="p-4 overflow-x-auto">
-                <pre className="text-xs bg-gray-50 p-4 rounded-lg border border-gray-200 max-h-96 overflow-y-auto">
-                  {JSON.stringify(results, null, 2)}
-                </pre>
-              </div>
-            </div>
-          )}
+  <EditableResultsTable 
+    results={results} 
+    jobId={jobId}
+    onUpdate={(updatedResults) => setResults(updatedResults)}
+  />
+)}
           
           {/* Status Bar */}
           {status && (

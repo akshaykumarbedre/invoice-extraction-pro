@@ -1,7 +1,8 @@
 'use client';
 import Navbar from '../components/Navbar';
 import { useState, useRef, useEffect } from 'react';
-import { UploadCloud, Send, RefreshCw, Loader2, AlertCircle, Image as ImageIcon } from 'lucide-react';
+import { UploadCloud, Send, RefreshCw, Loader2, AlertCircle, Image as ImageIcon ,X} from 'lucide-react';
+import ReactMarkdown from 'react-markdown'; 
 
 export default function Home() {
   // State management
@@ -14,6 +15,7 @@ export default function Home() {
   const [imagePreview, setImagePreview] = useState(null);
   const [imageDescription, setImageDescription] = useState('');
   const [suggestedQuestions, setSuggestedQuestions] = useState([]);
+  const [showImagePreviewBubble, setShowImagePreviewBubble] = useState(false);
   
   // References
   const fileInputRef = useRef(null);
@@ -90,106 +92,92 @@ export default function Home() {
   };
   
   // Handle file selection change
-  const handleFileChange = (e) => {
+  const handleFileChange = async (e) => {
     const file = e.target.files[0];
     if (file) {
       if (file.size > 10 * 1024 * 1024) {
         setUploadStatus('Error: File size exceeds 10MB limit');
         return;
       }
-      
+
       const reader = new FileReader();
-      reader.onload = (e) => {
+      reader.onload = async (e) => {
         setImagePreview(e.target.result);
-        setUploadStatus('Image selected. Click "Analyze Image" to proceed.');
+        // Automatically start analysis after preview is set
+        await handleImageUpload(file);
       };
       reader.readAsDataURL(file);
     }
   };
+
   
   // Handle image upload and analysis
-  const handleImageUpload = async () => {
-    const file = fileInputRef.current?.files[0];
+  const handleImageUpload = async (file) => {
     if (!file) {
       setUploadStatus('Please select an image first');
       return;
     }
-    
+
     setIsUploading(true);
     setUploadStatus('Analyzing image...');
-    
-    // Add user action to chat
-    setChatHistory(prev => [...prev, { 
-      type: 'system', 
-      message: "🖼️ You uploaded a new image for analysis" 
+
+    setChatHistory(prev => [...prev, {
+      type: 'system',
+      message: "🖼️ Processing your image..."
     }]);
-    
+
     const formData = new FormData();
     formData.append('image', file);
     formData.append('session_id', sessionId);
-    
+
     try {
       const response = await fetch('http://localhost:5000/upload_image', {
         method: 'POST',
         body: formData,
       });
-      
+
       const data = await response.json();
-      
+
       if (response.ok) {
-        // Update session ID
         setSessionId(data.session_id);
         localStorage.setItem('chatSessionId', data.session_id);
-        
-        // Set image description
         setImageDescription(data.description);
-        
-        // Add bot message
         setChatHistory(prev => [
           ...prev,
-          { 
-            type: 'bot', 
-            message: `I've analyzed your image. Here's what I see:\n\n${data.description}` 
+          {
+            type: 'bot',
+            message: `I've analyzed your image. Here's what I see:\n\n${data.description}`
           }
         ]);
-        
-        // Set suggested questions
         setSuggestedQuestions(data.suggested_questions || []);
-        
         setUploadStatus('Image analyzed successfully!');
-        
-        // Auto focus on input field after analysis
         setTimeout(() => {
           inputRef.current?.focus();
         }, 300);
       } else {
         setUploadStatus(`Error: ${data.error || 'Failed to analyze image'}`);
-        
-        // Add error message to chat
         setChatHistory(prev => [
           ...prev,
-          { 
-            type: 'error', 
-            message: `I encountered an error analyzing your image: ${data.error || 'Unknown error'}` 
+          {
+            type: 'error',
+            message: `I encountered an error analyzing your image: ${data.error || 'Unknown error'}`
           }
         ]);
       }
     } catch (error) {
       setUploadStatus(`Error: ${error.message}`);
-      
-      // Add error message to chat
       setChatHistory(prev => [
         ...prev,
-        { 
-          type: 'error', 
-          message: `I encountered an error: ${error.message}. Please try again.` 
+        {
+          type: 'error',
+          message: `I encountered an error: ${error.message}. Please try again.`
         }
       ]);
     } finally {
       setIsUploading(false);
     }
   };
-  
+
   // Send message to chat
   const sendMessage = async () => {
     const message = userInput.trim();
@@ -318,106 +306,143 @@ export default function Home() {
       <Navbar />
       <main className="flex-1 bg-gradient-to-b from-gray-50 to-gray-100 text-gray-900">
         <header className="bg-white border-b border-gray-200 shadow-sm py-4">
-          <div className="container mx-auto px-4 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <ImageIcon className="h-6 w-6 text-indigo-600" />
-              <h1 className="text-xl font-semibold text-gray-800">Visual Insight AI</h1>
+          <div className="container mx-auto px-4">
+            <div className="flex justify-between items-center">
+              <div>
+                <h1 className="text-xl font-semibold text-gray-900">Visual Insight AI</h1>
+                <p className="text-sm text-gray-500">Upload images and ask questions about them</p>
+              </div>
+              <button
+                onClick={resetConversation}
+                className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Reset
+              </button>
             </div>
-            <button
-              onClick={resetConversation}
-              className="flex items-center gap-1 text-sm text-gray-600 hover:text-gray-800 transition-colors"
-            >
-              <RefreshCw className="h-4 w-4" />
-              <span>New Conversation</span>
-            </button>
           </div>
         </header>
-        
-        <div className="flex-1 container mx-auto p-4 md:p-6 lg:py-8 flex flex-col lg:flex-row gap-6">
-          {/* Chat Panel */}
+  
+        <div className="container mx-auto p-4 flex flex-col md:flex-row gap-6 h-[calc(100vh-8rem)]">
+          {/* Main Chat Panel */}
           <div className="flex-1 flex flex-col bg-white rounded-xl shadow-md overflow-hidden border border-gray-200">
             {/* Chat Header */}
             <div className="bg-gray-50 p-4 border-b border-gray-200">
               <h2 className="font-medium text-gray-800">AI Assistant</h2>
               <p className="text-xs text-gray-500">Session ID: {sessionId.substring(0, 8)}...</p>
             </div>
-            
+  
             {/* Chat Messages */}
-            <div 
-              ref={chatContainerRef}
-              className="flex-1 p-4 overflow-y-auto min-h-[400px] max-h-[calc(100vh-16rem)]"
-            >
+            <div ref={chatContainerRef} className="flex-1 p-4 overflow-y-auto">
               {chatHistory.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-gray-400">
                   <ImageIcon className="h-12 w-12 mb-4 text-gray-300" />
                   <p className="text-center">Upload an image to start analyzing</p>
                 </div>
               ) : (
-                chatHistory.map((msg, index) => (
-                  <div
-                    key={index}
-                    className={`mb-4 animate-fadeIn ${
-                      msg.type === 'user' ? 'flex justify-end' : 
-                      msg.type === 'system' ? 'flex justify-center' :
-                      'flex justify-start'
-                    }`}
-                  >
-                    {msg.type === 'system' ? (
-                      <div className="py-2 px-3 bg-gray-100 rounded-md text-xs text-gray-500 max-w-[85%]">
-                        {msg.message}
-                      </div>
-                    ) : msg.type === 'error' ? (
-                      <div className="py-3 px-4 bg-red-50 border border-red-100 rounded-lg text-red-700 max-w-[85%] flex items-start gap-2">
-                        <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
-                        <div>
-                          {msg.message.split('\n').map((line, i) => (
-                            <span key={i}>
-                              {line}
-                              {i !== msg.message.split('\n').length - 1 && <br />}
-                            </span>
-                          ))}
+                <div className="space-y-4">
+                  {chatHistory.map((msg, index) => (
+                    <div
+                      key={index}
+                      className={`animate-fadeIn ${
+                        msg.type === 'user' ? 'flex justify-end' :
+                        msg.type === 'system' ? 'flex justify-center' :
+                        'flex justify-start'
+                      }`}
+                    >
+                      {msg.type === 'system' ? (
+                        <div className="py-2 px-3 bg-gray-100 rounded-md text-xs text-gray-500 max-w-[85%]">
+                          {msg.message}
                         </div>
+                      ) : msg.type === 'error' ? (
+                        <div className="py-3 px-4 bg-red-50 border border-red-100 rounded-lg text-red-700 max-w-[85%] flex items-start gap-2">
+                          <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
+                          <div>{msg.message}</div>
+                        </div>
+                      ) : (
+                        <div
+                          className={`py-3 px-4 rounded-2xl max-w-[85%] ${
+                            msg.type === 'user'
+                              ? 'bg-indigo-600 text-white rounded-tr-none'
+                              : 'bg-gray-100 text-gray-800 rounded-tl-none'
+                          }`}
+                        >
+                          <ReactMarkdown
+                            components={{
+                              p: ({children}) => <p className="mb-2 last:mb-0">{children}</p>,
+                              code: ({node, inline, className, children, ...props}) => {
+                                if (inline) {
+                                  return <code className="px-1 py-0.5 bg-black/10 rounded" {...props}>{children}</code>
+                                }
+                                return (
+                                  <pre className="bg-black/10 p-3 rounded-lg my-2 overflow-x-auto">
+                                    <code {...props}>{children}</code>
+                                  </pre>
+                                )
+                              }
+                            }}
+                          >
+                            {msg.message}
+                          </ReactMarkdown>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+  
+                  {isLoading && (
+                    <div className="flex justify-center">
+                      <div className="flex items-center gap-2 bg-gray-100 py-2 px-4 rounded-full text-gray-600">
+                        <Loader2 className="h-4 w-4 animate-spin text-indigo-600" />
+                        <span className="text-sm">Processing...</span>
                       </div>
-                    ) : (
-                      <div
-                        className={`py-3 px-4 rounded-2xl max-w-[85%] ${
-                          msg.type === 'user'
-                            ? 'bg-indigo-600 text-white rounded-tr-none shadow-sm'
-                            : 'bg-gray-100 text-gray-800 rounded-tl-none shadow-sm'
-                        }`}
-                      >
-                        {msg.message.split('\n').map((line, i) => (
-                          <span key={i}>
-                            {line}
-                            {i !== msg.message.split('\n').length - 1 && <br />}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))
-              )}
-              
-              {isLoading && (
-                <div className="flex justify-center my-4">
-                  <div className="flex items-center gap-2 bg-gray-100 py-2 px-4 rounded-full text-gray-600">
-                    <Loader2 className="h-4 w-4 animate-spin text-indigo-600" />
-                    <span className="text-sm">Processing...</span>
-                  </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
-            
-            {/* Input Area */}
+  
+            {/* Input Area with Inline Preview */}
             <div className="p-4 border-t border-gray-200 bg-white">
-              <div className="flex items-center gap-2">
+              <div className="flex items-end gap-2">
+                {/* Image Preview */}
+                {imagePreview && (
+                  <div className="relative">
+                    <div className="relative group">
+                      <div className="w-12 h-12 rounded-lg border border-gray-200 overflow-hidden cursor-pointer">
+                        <img src={imagePreview} alt="" className="w-full h-full object-cover"/>
+                      </div>
+                      
+                      {/* Hover Preview */}
+                      <div className="hidden group-hover:block absolute bottom-0 left-14 mb-2 p-2 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
+                        <div className="relative w-48 h-48">
+                          <img src={imagePreview} alt="" className="w-full h-full object-contain"/>
+                        </div>
+                      </div>
+  
+                      {/* Remove Image Button */}
+                      <button
+                        onClick={() => {
+                          setImagePreview(null);
+                          if (fileInputRef.current) {
+                            fileInputRef.current.value = '';
+                          }
+                        }}
+                        className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+  
+                {/* Input Area */}
                 <div className="relative flex-1">
                   <textarea
                     ref={inputRef}
                     value={userInput}
                     onChange={(e) => setUserInput(e.target.value)}
                     onKeyDown={handleKeyPress}
-                    className="w-full border border-gray-300 rounded-lg px-4 py-3 pr-12 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none overflow-hidden bg-white text-gray-900"
+                    className="w-full border border-gray-300 rounded-lg px-4 py-3 pr-24 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none overflow-hidden bg-white text-gray-900"
                     placeholder="Ask about the image..."
                     rows={1}
                     disabled={isLoading}
@@ -427,112 +452,51 @@ export default function Home() {
                       maxHeight: '120px'
                     }}
                   />
-                  <button
-                    onClick={sendMessage}
-                    disabled={!userInput.trim() || isLoading}
-                    className="absolute right-2 bottom-2 p-2 text-gray-400 hover:text-indigo-600 disabled:text-gray-300 transition-colors"
-                  >
-                    <Send className="h-5 w-5" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          {/* Right Sidebar */}
-          <div className="w-full lg:w-80 flex flex-col gap-6">
-            {/* Image Upload Section */}
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-              <div className="p-4 border-b border-gray-200 bg-gray-50">
-                <h2 className="text-base font-medium text-gray-800">Image Analysis</h2>
-              </div>
-              
-              <div className="p-4">
-                {imagePreview ? (
-                  <div className="mb-4">
-                    <div className="relative h-48 w-full rounded-lg overflow-hidden border border-gray-200">
-                      <img
-                        src={imagePreview}
-                        alt="Selected image"
-                        className="object-contain w-full h-full"
-                      />
-                    </div>
-                  </div>
-                ) : (
-                  <div 
-                    onClick={triggerFileUpload}
-                    className="mb-4 h-48 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-indigo-400 transition-colors bg-gray-50"
-                  >
-                    <UploadCloud className="h-10 w-10 text-gray-400 mb-2" />
-                    <p className="text-sm text-gray-500">Click to upload an image</p>
-                    <p className="text-xs text-gray-400 mt-1">JPG, PNG or GIF (max 10MB)</p>
-                  </div>
-                )}
-                
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleFileChange}
-                  accept="image/jpeg,image/png,image/gif"
-                  className="hidden"
-                />
-                
-                <div className="flex flex-col gap-3">
-                  <button
-                    onClick={imagePreview ? handleImageUpload : triggerFileUpload}
-                    disabled={isUploading}
-                    className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 transition-colors text-white py-2 px-4 rounded-lg font-medium disabled:bg-indigo-400"
-                  >
-                    {isUploading ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        <span>Analyzing...</span>
-                      </>
-                    ) : imagePreview ? (
-                      <>
-                        <ImageIcon className="h-4 w-4" />
-                        <span>Analyze Image</span>
-                      </>
-                    ) : (
-                      <>
-                        <UploadCloud className="h-4 w-4" />
-                        <span>Upload Image</span>
-                      </>
+  
+                  {/* Action Buttons */}
+                  <div className="absolute right-2 bottom-2 flex items-center gap-2">
+                    {!imagePreview && (
+                      <button
+                        onClick={triggerFileUpload}
+                        className="p-2 text-gray-400 hover:text-indigo-600 transition-colors"
+                        title="Upload image"
+                      >
+                        <UploadCloud className="h-5 w-5" />
+                      </button>
                     )}
-                  </button>
-                  
-                  {imagePreview && (
                     <button
-                      onClick={triggerFileUpload}
-                      className="text-sm text-gray-600 hover:text-indigo-600 transition-colors"
+                      onClick={sendMessage}
+                      disabled={!userInput.trim() || isLoading}
+                      className="p-2 text-gray-400 hover:text-indigo-600 disabled:text-gray-300 transition-colors"
                     >
-                      Choose a different image
+                      <Send className="h-5 w-5" />
                     </button>
-                  )}
+                  </div>
                 </div>
-                
-                {uploadStatus && (
-                  <div className={`mt-3 text-sm px-3 py-2 rounded-md ${
-                    uploadStatus.includes('Error') ? 'bg-red-50 text-red-700' : 
-                    uploadStatus.includes('success') ? 'bg-green-50 text-green-700' : 
-                    'bg-blue-50 text-blue-700'
-                  }`}>
-                    {uploadStatus}
-                  </div>
-                )}
               </div>
-              
-              {imageDescription && (
-                <div className="px-4 pb-4">
-                  <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                    <h3 className="text-sm font-medium text-gray-700 mb-1">Analysis Results:</h3>
-                    <p className="text-sm text-gray-600 leading-relaxed">{imageDescription}</p>
-                  </div>
+  
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                accept="image/jpeg,image/png,image/gif"
+                className="hidden"
+              />
+  
+              {uploadStatus && (
+                <div className={`mt-3 text-sm px-3 py-2 rounded-md ${
+                  uploadStatus.includes('Error') ? 'bg-red-50 text-red-700' :
+                  uploadStatus.includes('success') ? 'bg-green-50 text-green-700' :
+                  'bg-blue-50 text-blue-700'
+                }`}>
+                  {uploadStatus}
                 </div>
               )}
             </div>
-            
-            {/* Suggested Questions */}
+          </div>
+  
+          {/* Suggested Questions Sidebar */}
+          <div className="w-full md:w-80 flex flex-col gap-4">
             {suggestedQuestions.length > 0 && (
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                 <div className="p-4 border-b border-gray-200 bg-gray-50">
@@ -554,52 +518,34 @@ export default function Home() {
                 </div>
               </div>
             )}
-            
-            {/* Feature Highlights */}
-            <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl border border-indigo-100 shadow-sm overflow-hidden p-4">
-              <h3 className="text-sm font-medium text-indigo-800 mb-2">Features</h3>
-              <ul className="text-xs text-indigo-700 space-y-2">
-                <li className="flex items-start gap-2">
-                  <span className="w-4 h-4 bg-indigo-200 rounded-full flex items-center justify-center text-indigo-600 flex-shrink-0 mt-0.5">✓</span>
-                  <span>Image analysis with detailed descriptions</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="w-4 h-4 bg-indigo-200 rounded-full flex items-center justify-center text-indigo-600 flex-shrink-0 mt-0.5">✓</span>
-                  <span>Contextual question suggestions</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="w-4 h-4 bg-indigo-200 rounded-full flex items-center justify-center text-indigo-600 flex-shrink-0 mt-0.5">✓</span>
-                  <span>Multi-turn conversation with memory</span>
-                </li>
-              </ul>
-            </div>
           </div>
         </div>
-        
+  
         <footer className="py-4 border-t border-gray-200 bg-white">
           <div className="container mx-auto px-4 text-center text-xs text-gray-500">
             © 2025 Visual Insight AI. All rights reserved.
           </div>
         </footer>
-        
-        {/* Add global styles */}
-        <style jsx global>{`
-          @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(8px); }
-            to { opacity: 1; transform: translateY(0); }
-          }
-          .animate-fadeIn {
-            animation: fadeIn 0.3s ease-out forwards;
-          }
-          
-          textarea {
-            overflow-y: hidden;
-          }
-          textarea:focus {
-            outline: none;
-          }
-        `}</style>
       </main>
+  
+      {/* Global styles */}
+      <style jsx global>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.3s ease-out forwards;
+        }
+        
+        textarea {
+          overflow-y: hidden;
+        }
+        textarea:focus {
+          outline: none;
+        }
+      `}</style>
     </div>
   );
+
 }

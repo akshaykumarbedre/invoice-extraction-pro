@@ -21,6 +21,7 @@ import re
 import pandas as pd
 import tempfile
 import uuid
+from io import BytesIO
 
 # Load environment variables
 load_dotenv()
@@ -42,6 +43,11 @@ model_vision = ChatGoogleGenerativeAI(model=model_name)
 
 # Dictionary to store conversation chains for each session
 conversation_chains = {}
+
+# In-memory storage
+schema_storage = {}  # Store schemas with schema_id as key
+job_storage = {}    # Store job info with job_id as key
+result_storage = {} # Store results with job_id as key
 
 # ====================================================
 # Chat & Image Analysis Functions
@@ -92,7 +98,7 @@ def suggest_questions(image_description):
         list: List of suggested questions
     """
     class Question(BaseModel):
-        question: str = Field(None, description="Act as teacher , and genarate the suggested question based on given content and answe should be preset in given ")
+        question: str = Field(None, description="Generate simple and useful suggestion questions based on the given content. The questions should be directly answerable using the information within the content.")
     
     class SuggestQue(BaseModel):
         questions: List[Question]
@@ -167,7 +173,7 @@ def json_to_pydantic_model(json_data: Union[List, Dict], class_name: str = "Data
         description+=" if No data found , show None"
         
         # Add field with type annotation and Field description
-        class_definition.append(f"    {field_name}: {field_type} = Field(description=\"{description}\")")
+        class_definition.append(f"    {field_name}: str  = Field(description=\"{description}\")")
     
     return "\n".join(class_definition)
 
@@ -277,10 +283,9 @@ def create_schema():
         # Generate Pydantic model from schema
         pydantic_class_code = json_to_pydantic_model(schema_data)
         
-        # Save schema to session or temporary file
+        # Store schema in memory
         schema_id = str(uuid.uuid4())
-        with open(f'data/schema_{schema_id}.py', 'w') as f:
-            f.write(pydantic_class_code)
+        schema_storage[schema_id] = pydantic_class_code
         
         return jsonify({
             'success': True, 
@@ -295,41 +300,40 @@ def create_schema():
 def upload_images():
     try:
         schema_id = request.form.get('schema_id')
-        if not schema_id or not os.path.exists(f'data/schema_{schema_id}.py'):
+        if not schema_id or schema_id not in schema_storage:
             return jsonify({'success': False, 'error': 'Invalid schema ID'}), 400
         
         if 'files[]' not in request.files:
             return jsonify({'success': False, 'error': 'No files provided'}), 400
         
         files = request.files.getlist('files[]')
-        file_paths = []
+        file_data = []
         
         for file in files:
             if file.filename == '':
                 continue
-                
-            filename = secure_filename(file.filename)
-            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            file.save(file_path)
-            file_paths.append(file_path)
+            
+            # Store file data in memory
+            file_bytes = file.read()
+            file_data.append({
+                'filename': secure_filename(file.filename),
+                'data': file_bytes
+            })
         
-        if not file_paths:
+        if not file_data:
             return jsonify({'success': False, 'error': 'No valid files uploaded'}), 400
         
-        # Create a job ID for processing
+        # Create a job ID and store job info in memory
         job_id = str(uuid.uuid4())
-        
-        # Save file paths to process
-        with open(f'data/job_{job_id}.json', 'w') as f:
-            json.dump({
-                'schema_id': schema_id,
-                'file_paths': file_paths
-            }, f)
+        job_storage[job_id] = {
+            'schema_id': schema_id,
+            'files': file_data
+        }
         
         return jsonify({
             'success': True,
             'job_id': job_id,
-            'files_count': len(file_paths),
+            'files_count': len(file_data),
             'message': 'Files uploaded successfully'
         })
         
@@ -340,22 +344,18 @@ def upload_images():
 def process_images():
     try:
         job_id = request.json.get('job_id')
-        if not job_id or not os.path.exists(f'data/job_{job_id}.json'):
+        if not job_id or job_id not in job_storage:
             return jsonify({'success': False, 'error': 'Invalid job ID'}), 400
         
-        # Load job details
-        with open(f'data/job_{job_id}.json', 'r') as f:
-            job_info = json.load(f)
-        
+        # Get job info from memory
+        job_info = job_storage[job_id]
         schema_id = job_info['schema_id']
-        file_paths = job_info['file_paths']
+        files = job_info['files']
         
-        # Load schema
-        with open(f'data/schema_{schema_id}.py', 'r') as f:
-            schema_code = f.read()
+        # Get schema from memory
+        schema_code = schema_storage[schema_id]
         
         # Execute the schema code to define the Data class
-        exec(schema_code)
         locals_dict = {}
         exec(schema_code, globals(), locals_dict)
         Data = locals_dict['Data']
@@ -365,33 +365,39 @@ def process_images():
         
         # Process each image
         results = []
-        for file_path in file_paths:
+        for file_info in files:
             try:
+                # Create temporary BytesIO object
+                file_obj = BytesIO(file_info['data'])
+                
                 # Get image description
-                image_des = get_image_description(file_path)
+                image_des = get_image_description(file_obj)
                 
                 # Extract structured data
                 result = structured_llm.invoke(image_des)
                 
                 # Convert to dict and add filename
                 result_dict = result.dict()
-                result_dict['filename'] = os.path.basename(file_path)
+                result_dict['filename'] = file_info['filename']
                 results.append(result_dict)
             except Exception as e:
-                # Add error entry
                 results.append({
-                    'filename': os.path.basename(file_path),
+                    'filename': file_info['filename'],
                     'error': str(e)
                 })
         
-        # Create Excel file
+        # Store results in memory
+        result_storage[job_id] = results
+        
+        # Create Excel file in memory
+        excel_buffer = BytesIO()
         df = pd.DataFrame(results)
-        excel_path = f'results_{job_id}.xlsx'
-        df.to_excel(excel_path, index=False)
+        df.to_excel(excel_buffer, index=False)
+        excel_buffer.seek(0)
         
         return jsonify({
             'success': True,
-            'excel_path': excel_path,
+            'job_id': job_id,
             'message': 'Processing complete',
             'results': results
         })
@@ -401,11 +407,21 @@ def process_images():
 
 @app.route('/download_excel/<job_id>', methods=['GET'])
 def download_excel(job_id):
-    excel_path = f'results_{job_id}.xlsx'
-    if not os.path.exists(excel_path):
+    if job_id not in result_storage:
         return jsonify({'success': False, 'error': 'Results not found'}), 404
     
-    return send_file(excel_path, as_attachment=True)
+    # Create Excel file in memory
+    excel_buffer = BytesIO()
+    df = pd.DataFrame(result_storage[job_id])
+    df.to_excel(excel_buffer, index=False)
+    excel_buffer.seek(0)
+    
+    return send_file(
+        excel_buffer,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'results_{job_id}.xlsx'
+    )
 
 @app.route('/cleanup', methods=['POST'])
 def cleanup():
@@ -413,22 +429,34 @@ def cleanup():
         job_id = request.json.get('job_id')
         schema_id = request.json.get('schema_id')
         
-        files_to_remove = []
-        
         if job_id:
-            files_to_remove.extend([
-                f'job_{job_id}.json',
-                f'results_{job_id}.xlsx'
-            ])
+            job_storage.pop(job_id, None)
+            result_storage.pop(job_id, None)
         
         if schema_id:
-            files_to_remove.append(f'schema_{schema_id}.py')
-        
-        for file_path in files_to_remove:
-            if os.path.exists(file_path):
-                os.remove(file_path)
+            schema_storage.pop(schema_id, None)
         
         return jsonify({'success': True, 'message': 'Cleanup successful'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+
+@app.route('/update_results', methods=['POST'])
+def update_results():
+    try:
+        job_id = request.json.get('job_id')
+        updated_results = request.json.get('results', [])
+        
+        if not job_id:
+            return jsonify({'success': False, 'error': 'Job ID is required'}), 400
+        
+        # Update results in memory
+        result_storage[job_id] = updated_results
+        
+        return jsonify({
+            'success': True,
+            'message': 'Results updated successfully'
+        })
+        
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 400
 
