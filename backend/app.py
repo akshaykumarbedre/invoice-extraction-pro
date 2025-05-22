@@ -272,7 +272,7 @@ def reset_conversation():
 
 @app.route('/extraction')
 def extraction_interface():
-    """Render the image extraction interface"""
+    """Render the invoice extraction interface"""
     return render_template('extraction.html')
 
 @app.route('/create_schema', methods=['POST'])
@@ -290,7 +290,7 @@ def create_schema():
         return jsonify({
             'success': True, 
             'schema_id': schema_id,
-            'message': 'Schema created successfully',
+            'message': 'Invoice template created successfully',
             'code': pydantic_class_code
         })
     except Exception as e:
@@ -301,10 +301,10 @@ def upload_images():
     try:
         schema_id = request.form.get('schema_id')
         if not schema_id or schema_id not in schema_storage:
-            return jsonify({'success': False, 'error': 'Invalid schema ID'}), 400
+            return jsonify({'success': False, 'error': 'Invalid template ID'}), 400
         
         if 'files[]' not in request.files:
-            return jsonify({'success': False, 'error': 'No files provided'}), 400
+            return jsonify({'success': False, 'error': 'No invoice files provided'}), 400
         
         files = request.files.getlist('files[]')
         file_data = []
@@ -334,7 +334,7 @@ def upload_images():
             'success': True,
             'job_id': job_id,
             'files_count': len(file_data),
-            'message': 'Files uploaded successfully'
+            'message': 'Invoice files uploaded successfully'
         })
         
     except Exception as e:
@@ -374,7 +374,7 @@ def process_images():
                 image_des = get_image_description(file_obj)
                 
                 # Extract structured data
-                result = structured_llm.invoke(image_des)
+                result = structured_llm.invoke(f"Extract invoice data from the following text description of an invoice: {image_des}")
                 
                 # Convert to dict and add filename
                 result_dict = result.dict()
@@ -398,7 +398,7 @@ def process_images():
         return jsonify({
             'success': True,
             'job_id': job_id,
-            'message': 'Processing complete',
+            'message': 'Invoice data extraction complete',
             'results': results
         })
         
@@ -455,6 +455,42 @@ def update_results():
         return jsonify({
             'success': True,
             'message': 'Results updated successfully'
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+
+@app.route('/update_api_key', methods=['POST'])
+def update_api_key():
+    """
+    Update the Google Gemini API key
+    
+    Expected JSON payload:
+    {
+        "api_key": "your-new-api-key"
+    }
+    """
+    try:
+        data = request.json
+        api_key = data.get('api_key')
+        
+        if not api_key:
+            return jsonify({'success': False, 'error': 'API key is required'}), 400
+            
+        # Update environment variable
+        os.environ['GOOGLE_API_KEY'] = api_key
+        
+        # Reinitialize the model with new API key
+        global model_vision
+        model_vision = ChatGoogleGenerativeAI(model=model_name)
+        
+        # Reset all conversation chains since they use the old model
+        global conversation_chains
+        conversation_chains = {}
+        
+        return jsonify({
+            'success': True,
+            'message': 'API key updated successfully'
         })
         
     except Exception as e:
