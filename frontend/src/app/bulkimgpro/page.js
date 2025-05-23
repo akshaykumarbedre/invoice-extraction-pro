@@ -1,7 +1,8 @@
 'use client';
 import Navbar from '../components/Navbar';
-import { useState, useRef } from 'react';
-import { Upload, FileText, Server, Download, Trash2, Plus, Database, CheckCircle, AlertCircle, Loader2, Receipt, CreditCard, DollarSign } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Upload, FileText, Server, Download, Trash2, Plus, Database, CheckCircle, AlertCircle, 
+         Loader2, Receipt, ArrowRight, ChevronRight, X, Edit3, Save, Settings, Clock, RefreshCw } from 'lucide-react';
 import EditableResultsTable from '../components/EditableResultsTable';
 
 export default function BulkImageProcessing() {
@@ -15,10 +16,15 @@ export default function BulkImageProcessing() {
   const [results, setResults] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDemoLoaded, setIsDemoLoaded] = useState(false);
+  const [activeStep, setActiveStep] = useState(1);
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastType, setToastType] = useState('success');
   const fieldTypes = ['str', 'int', 'float', 'bool', 'List[str]'];
   
   // References
   const fileInputRef = useRef(null);
+  const dropZoneRef = useRef(null);
   
   // Demo invoice schema
   const demoSchema = [
@@ -34,12 +40,34 @@ export default function BulkImageProcessing() {
     ['payment_method', 'str', 'The method of payment accepted']
   ];
 
-  // Demo invoice file URLs (these would be local or accessible URLs)
+  // Demo invoice file URLs
   const demoFileUrls = [
-    '/demo/invoice-sample-1.jpg',
-    '/demo/invoice-sample-2.jpg',
-    '/demo/invoice-sample-3.jpg'
+    '/invoice-sample-1.jpg',
+    '/invoice-sample-2.jpg',
+    '/invoice-sample-3.jpg'
   ];
+  
+  // Check for completion of steps
+  useEffect(() => {
+    if (schemaId && !files.length) {
+      setActiveStep(2);
+    } else if (jobId && !results) {
+      setActiveStep(3);
+    } else if (results) {
+      setActiveStep(4);
+    }
+  }, [schemaId, files, jobId, results]);
+
+  // Show toast notification
+  const displayToast = (message, type = 'success') => {
+    setToastMessage(message);
+    setToastType(type);
+    setShowToast(true);
+    
+    setTimeout(() => {
+      setShowToast(false);
+    }, 3000);
+  };
   
   // Handle add field to schema
   const handleAddField = () => {
@@ -61,9 +89,46 @@ export default function BulkImageProcessing() {
   // Handle file selection change
   const handleFileChange = (e) => {
     const selectedFiles = Array.from(e.target.files);
-    setFiles(selectedFiles);
-    setStatus(`${selectedFiles.length} file(s) selected`);
-    setStatusType('info');
+    setFiles(prevFiles => [...prevFiles, ...selectedFiles]);
+    setStatus(`${selectedFiles.length} file(s) added`);
+    setStatusType('success');
+    displayToast(`${selectedFiles.length} file(s) added successfully`, 'success');
+  };
+  
+  // Handle drag and drop
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (dropZoneRef.current) {
+      dropZoneRef.current.classList.add('border-teal-400', 'bg-teal-50');
+    }
+  };
+  
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (dropZoneRef.current) {
+      dropZoneRef.current.classList.remove('border-teal-400', 'bg-teal-50');
+    }
+  };
+  
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (dropZoneRef.current) {
+      dropZoneRef.current.classList.remove('border-teal-400', 'bg-teal-50');
+    }
+    
+    const droppedFiles = Array.from(e.dataTransfer.files);
+    setFiles(prevFiles => [...prevFiles, ...droppedFiles]);
+    setStatus(`${droppedFiles.length} file(s) added`);
+    setStatusType('success');
+    displayToast(`${droppedFiles.length} file(s) added successfully`, 'success');
+  };
+  
+  // Remove file
+  const removeFile = (indexToRemove) => {
+    setFiles(files.filter((_, index) => index !== indexToRemove));
   };
   
   // Trigger file input click
@@ -77,6 +142,7 @@ export default function BulkImageProcessing() {
     setSchema(demoSchema);
     setStatus('Demo schema loaded. Create the template to continue.');
     setStatusType('info');
+    displayToast('Demo schema loaded successfully', 'success');
   };
 
   // Load demo files
@@ -84,6 +150,7 @@ export default function BulkImageProcessing() {
     if (!schemaId) {
       setStatus('Please create the template first before loading demo files');
       setStatusType('error');
+      displayToast('Please create the template first', 'error');
       return;
     }
     
@@ -92,26 +159,34 @@ export default function BulkImageProcessing() {
       setStatus('Loading demo invoice files...');
       setStatusType('info');
       
-      // For a real implementation, you would fetch these files from your server
-      // Here we're simulating the file loading with a timeout
-      setTimeout(() => {
-        // This is a mock implementation - in a real scenario,
-        // you would actually fetch and load the files
-        const mockFiles = [
-          new File([''], 'invoice-sample-1.jpg', { type: 'image/jpeg' }),
-          new File([''], 'invoice-sample-2.jpg', { type: 'image/jpeg' }),
-          new File([''], 'invoice-sample-3.jpg', { type: 'image/jpeg' })
-        ];
-        
-        setFiles(mockFiles);
-        setStatus('Demo invoice files loaded. You can now upload them.');
-        setStatusType('success');
-        setIsProcessing(false);
-      }, 1000);
+      // Actually fetch the demo files from the public folder
+      const demoFiles = [];
       
+      for (let i = 0; i < demoFileUrls.length; i++) {
+        try {
+          const response = await fetch(demoFileUrls[i]);
+          const blob = await response.blob();
+          const fileName = demoFileUrls[i].split('/').pop();
+          const file = new File([blob], fileName, { type: 'image/jpeg' });
+          demoFiles.push(file);
+        } catch (err) {
+          console.error(`Error loading demo file ${demoFileUrls[i]}:`, err);
+        }
+      }
+      
+      if (demoFiles.length === 0) {
+        throw new Error('Failed to load demo files');
+      }
+      
+      setFiles(demoFiles);
+      setStatus(`${demoFiles.length} demo invoice files loaded. You can now upload them.`);
+      setStatusType('success');
+      displayToast(`${demoFiles.length} demo files loaded successfully`, 'success');
     } catch (error) {
       setStatus(`Error: ${error.message}`);
       setStatusType('error');
+      displayToast(`Error: ${error.message}`, 'error');
+    } finally {
       setIsProcessing(false);
     }
   };
@@ -122,6 +197,7 @@ export default function BulkImageProcessing() {
     if (schema.length === 0) {
       setStatus('Please add at least one field to the schema');
       setStatusType('error');
+      displayToast('Please add at least one field', 'error');
       return;
     }
     
@@ -129,6 +205,7 @@ export default function BulkImageProcessing() {
     if (!isValid) {
       setStatus('All fields must have a name and type');
       setStatusType('error');
+      displayToast('All fields must have a name and type', 'error');
       return;
     }
     
@@ -149,13 +226,17 @@ export default function BulkImageProcessing() {
         setSchemaId(data.schema_id);
         setStatus('Schema created successfully');
         setStatusType('success');
+        setActiveStep(2);
+        displayToast('Template created successfully!', 'success');
       } else {
         setStatus(`Error: ${data.error}`);
         setStatusType('error');
+        displayToast(`Error: ${data.error}`, 'error');
       }
     } catch (error) {
       setStatus(`Error: ${error.message}`);
       setStatusType('error');
+      displayToast(`Error: ${error.message}`, 'error');
     } finally {
       setIsProcessing(false);
     }
@@ -166,6 +247,7 @@ export default function BulkImageProcessing() {
     if (files.length === 0) {
       setStatus('Please select at least one image');
       setStatusType('error');
+      displayToast('Please select at least one image', 'error');
       return;
     }
     
@@ -189,13 +271,17 @@ export default function BulkImageProcessing() {
         setJobId(data.job_id);
         setStatus('Images uploaded successfully');
         setStatusType('success');
+        setActiveStep(3);
+        displayToast('Images uploaded successfully!', 'success');
       } else {
         setStatus(`Error: ${data.error}`);
         setStatusType('error');
+        displayToast(`Error: ${data.error}`, 'error');
       }
     } catch (error) {
       setStatus(`Error: ${error.message}`);
       setStatusType('error');
+      displayToast(`Error: ${error.message}`, 'error');
     } finally {
       setIsProcessing(false);
     }
@@ -220,13 +306,17 @@ export default function BulkImageProcessing() {
         setResults(data.results);
         setStatus('Processing complete');
         setStatusType('success');
+        setActiveStep(4);
+        displayToast('Data extraction completed!', 'success');
       } else {
         setStatus(`Error: ${data.error}`);
         setStatusType('error');
+        displayToast(`Error: ${data.error}`, 'error');
       }
     } catch (error) {
       setStatus(`Error: ${error.message}`);
       setStatusType('error');
+      displayToast(`Error: ${error.message}`, 'error');
     } finally {
       setIsProcessing(false);
     }
@@ -236,18 +326,19 @@ export default function BulkImageProcessing() {
   const downloadResults = () => {
     if (jobId) {
       window.location.href = `http://localhost:5000/download_excel/${jobId}`;
+      displayToast('Downloading Excel file...', 'success');
     }
   };
 
   // Cleanup
   const cleanup = async () => {
-    if (!window.confirm("Are you sure you want to clean up? This will remove all data related to this job.")) {
+    if (!window.confirm("Are you sure you want to start over? This will clear all data and progress.")) {
       return;
     }
     
     try {
       setIsProcessing(true);
-      setStatus('Cleaning up...');
+      setStatus('Resetting workspace...');
       setStatusType('info');
       
       const response = await fetch('http://localhost:5000/cleanup', {
@@ -259,29 +350,33 @@ export default function BulkImageProcessing() {
       const data = await response.json();
       
       if (data.success) {
-        setStatus('Cleanup complete');
+        setStatus('Workspace reset successfully');
         setStatusType('success');
         setSchema([]);
         setFiles([]);
         setSchemaId(null);
         setJobId(null);
         setResults(null);
+        setActiveStep(1);
         if (fileInputRef.current) {
           fileInputRef.current.value = '';
         }
+        displayToast('Workspace reset successfully', 'success');
       } else {
         setStatus(`Error: ${data.error}`);
         setStatusType('error');
+        displayToast(`Error: ${data.error}`, 'error');
       }
     } catch (error) {
       setStatus(`Error: ${error.message}`);
       setStatusType('error');
+      displayToast(`Error: ${error.message}`, 'error');
     } finally {
       setIsProcessing(false);
     }
   };
 
-  // Get status style
+  // Get status style for notification bar
   const getStatusStyle = () => {
     switch (statusType) {
       case 'error':
@@ -290,6 +385,18 @@ export default function BulkImageProcessing() {
         return 'bg-green-50 border-green-200 text-green-700';
       default:
         return 'bg-teal-50 border-teal-200 text-teal-700';
+    }
+  };
+
+  // Get toast style
+  const getToastStyle = () => {
+    switch (toastType) {
+      case 'error':
+        return 'bg-red-500 text-white';
+      case 'success':
+        return 'bg-teal-600 text-white';
+      default:
+        return 'bg-teal-600 text-white';
     }
   };
 
@@ -310,173 +417,267 @@ export default function BulkImageProcessing() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-[#F9FAFB] font-sans">
       <Navbar />
-      <main className="flex-1 bg-gradient-to-b from-gray-50 to-teal-50 text-gray-900">
-        {/* Header with title and demo buttons */}
-        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <h1 className="text-xl font-semibold text-gray-900">Batch Invoice Processing</h1>
-          <div className="flex gap-2">
-            <button
-              onClick={loadDemoSchema}
-              className="flex items-center gap-1 text-sm bg-teal-100 text-teal-800 px-3 py-1.5 rounded-md hover:bg-teal-200 transition-colors"
-              disabled={isProcessing || isDemoLoaded}
-            >
-              <Receipt className="h-4 w-4" />
-              <span>Load Demo Data</span>
-            </button>
-            <button
-              onClick={cleanup}
-              className="flex items-center gap-1 text-sm text-gray-600 hover:text-gray-800 transition-colors"
-            >
-              <Trash2 className="h-4 w-4" />
-              <span>Reset</span>
-            </button>
-          </div>
+      
+      {/* Toast Notification */}
+      {showToast && (
+        <div className={`fixed top-4 right-4 z-50 py-2 px-4 rounded-lg shadow-lg transition-all duration-300 flex items-center gap-2 max-w-md ${getToastStyle()} animate-fadeIn`}>
+          {toastType === 'error' ? 
+            <AlertCircle className="h-5 w-5" /> : 
+            <CheckCircle className="h-5 w-5" />
+          }
+          <span>{toastMessage}</span>
+          <button 
+            onClick={() => setShowToast(false)}
+            className="ml-2 text-white/80 hover:text-white"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
+      )}
+      
+      <main className="flex-1 text-gray-800">
+        {/* Header with title and actions */}
+        <header className="bg-white border-b border-gray-100 py-5 shadow-sm">
+          <div className="container mx-auto px-4 md:px-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <h1 className="text-2xl font-semibold text-gray-900">Invoice Batch Processing</h1>
+                <p className="text-sm text-gray-500 mt-1">Extract data from multiple invoices at once</p>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={loadDemoSchema}
+                  className="flex items-center gap-2 px-4 py-2.5 text-sm bg-teal-50 text-teal-700 rounded-xl border border-teal-100 hover:bg-teal-100 transition-all duration-200"
+                  disabled={isProcessing || isDemoLoaded}
+                >
+                  <Receipt className="h-4 w-4" />
+                  <span>Load Demo Data</span>
+                </button>
+                <button
+                  onClick={cleanup}
+                  className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-600 bg-white rounded-xl border border-gray-200 hover:bg-gray-50 transition-all duration-200"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  <span>Start Over</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </header>
 
-        <div className="container mx-auto p-4 md:p-6">
+        {/* Progress Steps */}
+        <div className="container mx-auto px-4 py-6">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-8">
+            <div className="flex items-center justify-between">
+              {[
+                { step: 1, title: "Define Fields" },
+                { step: 2, title: "Upload Files" },
+                { step: 3, title: "Process Data" },
+                { step: 4, title: "Review Results" }
+              ].map((item, index) => (
+                <div key={index} className="flex items-center flex-1">
+                  <div className={`flex flex-col items-center ${index > 0 ? 'ml-4' : ''}`}>
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium ${
+                      activeStep > item.step ? 'bg-teal-600 text-white' : 
+                      activeStep === item.step ? 'bg-teal-100 text-teal-800 border-2 border-teal-600' : 
+                      'bg-gray-100 text-gray-500 border border-gray-300'
+                    } transition-all duration-200`}>
+                      {activeStep > item.step ? <CheckCircle className="h-5 w-5" /> : item.step}
+                    </div>
+                    <span className={`text-xs mt-2 font-medium ${
+                      activeStep >= item.step ? 'text-teal-800' : 'text-gray-500'
+                    }`}>
+                      {item.title}
+                    </span>
+                  </div>
+                  
+                  {index < 3 && (
+                    <div className={`h-1 flex-1 mx-2 ${
+                      activeStep > item.step ? 'bg-teal-600' : 'bg-gray-200'
+                    } transition-all duration-300`}></div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Demo Banner */}
           {isDemoLoaded && (
-            <div className="mb-6 p-4 bg-teal-50 border border-teal-200 rounded-lg text-teal-800 flex items-start gap-3">
-              <div className="rounded-full bg-teal-100 p-2 mt-1">
+            <div className="mb-6 p-5 bg-teal-50 border border-teal-100 rounded-xl text-teal-800 flex items-start gap-4 animate-fadeIn">
+              <div className="rounded-full bg-teal-100 p-2.5 mt-0.5 flex-shrink-0">
                 <Receipt className="h-5 w-5 text-teal-700" />
               </div>
               <div>
-                <h3 className="font-medium mb-1">Demo Mode Active</h3>
-                <p className="text-sm">
-                  A demonstration invoice schema has been loaded. Follow these steps to test:
+                <h3 className="font-medium text-lg mb-1">Demo Mode Active</h3>
+                <p className="text-sm leading-relaxed">
+                  A sample invoice schema has been loaded to help you explore the system's capabilities.
+                  Follow the workflow steps to see how batch processing works.
                 </p>
-                <ol className="text-sm list-decimal ml-4 mt-2 space-y-1">
-                  <li>Click <strong>"Create Template"</strong> to create the schema</li>
-                  <li>Use <strong>"Load Demo Files"</strong> button that will appear after creating the template</li>
-                  <li>Click <strong>"Upload Files"</strong> to upload the demo invoices</li>
-                  <li>Click <strong>"Extract Data"</strong> to process the invoices</li>
-                </ol>
               </div>
             </div>
           )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Schema Definition Panel */}
-            <div className="bg-white rounded-xl shadow-md overflow-hidden border border-gray-200">
-              <div className="bg-teal-50 p-4 border-b border-gray-200">
-                <h2 className="font-medium text-gray-800">Step 1: Define Data Fields</h2>
-                <p className="text-xs text-gray-500">Configure which information to extract from invoices</p>
-              </div>
-              
-              <div className="p-4">
-                {schema.length === 0 ? (
-                  <div className="text-center py-6 bg-gray-50 rounded-lg border border-dashed border-gray-300">
-                    <Receipt className="h-10 w-10 text-gray-400 mx-auto mb-2" />
-                    <p className="text-gray-500">No fields added yet</p>
-                    <div className="flex justify-center gap-2 mt-4">
-                      <button 
-                        onClick={handleAddField}
-                        className="bg-teal-100 text-teal-700 px-4 py-2 rounded-lg hover:bg-teal-200 transition-colors"
-                      >
-                        Add First Field
-                      </button>
-                      <button 
-                        onClick={loadDemoSchema}
-                        className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors"
-                      >
-                        Load Demo Schema
-                      </button>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Main Content Area - Schema Builder (Step 1) */}
+            {activeStep === 1 && (
+              <div className="lg:col-span-12 bg-white rounded-xl shadow-sm overflow-hidden border border-gray-200 animate-fadeIn">
+                <div className="bg-white p-6 border-b border-gray-100">
+                  <div className="flex items-center gap-3 mb-1">
+                    <div className="bg-teal-100 rounded-full p-2 text-teal-700">
+                      <Settings className="h-5 w-5" />
                     </div>
+                    <h2 className="text-xl font-semibold text-gray-800">Define Extraction Fields</h2>
                   </div>
-                ) : (
-                  <div className="mb-4">
-                    <div className="grid grid-cols-12 gap-2 mb-2 text-sm font-medium text-gray-600 px-2">
-                      <div className="col-span-4">Field Name</div>
-                      <div className="col-span-8">Description</div>
-                    </div>
-                    
-                    {schema.map((field, index) => (
-                      <div key={index} className="grid grid-cols-12 gap-2 mb-2">
-                        <input
-                          type="text"
-                          placeholder="Field Name"
-                          value={field[0]}
-                          onChange={(e) => handleFieldChange(index, 0, e.target.value)}
-                          className="col-span-4 border border-gray-300 rounded-md p-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                        />
-                        <input
-                          type="text"
-                          placeholder="Description (optional)"
-                          value={field[2]}
-                          onChange={(e) => handleFieldChange(index, 2, e.target.value)}
-                          className="col-span-7 border border-gray-300 rounded-md p-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                        />
-                        <button
-                          onClick={() => handleDeleteField(index)}
-                          className="col-span-1 flex items-center justify-center text-red-500 hover:text-red-700 transition-colors"
-                          title="Delete field"
+                  <p className="text-gray-500 ml-10">Specify what information you want to extract from your invoices</p>
+                </div>
+                
+                <div className="p-6">
+                  {schema.length === 0 ? (
+                    <div className="text-center py-12 bg-gray-50 rounded-xl border border-dashed border-gray-300">
+                      <Receipt className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                      <h3 className="text-lg font-medium text-gray-700 mb-2">No Fields Added Yet</h3>
+                      <p className="text-gray-500 max-w-md mx-auto mb-6">
+                        Define which invoice data you want to extract, such as invoice number, 
+                        date, amount, or vendor details.
+                      </p>
+                      <div className="flex justify-center gap-3">
+                        <button 
+                          onClick={handleAddField}
+                          className="bg-teal-600 text-white px-5 py-2.5 rounded-xl hover:bg-teal-700 transition-colors flex items-center gap-2 shadow-sm"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Plus className="h-4 w-4" />
+                          <span>Add First Field</span>
+                        </button>
+                        <button 
+                          onClick={loadDemoSchema}
+                          className="bg-white text-gray-700 px-5 py-2.5 rounded-xl hover:bg-gray-50 border border-gray-200 transition-colors flex items-center gap-2"
+                        >
+                          <FileText className="h-4 w-4" />
+                          <span>Load Demo Template</span>
                         </button>
                       </div>
-                    ))}
-                  </div>
-                )}
-                
-                <div className="flex items-center justify-between mt-4">
-                  <button 
-                    onClick={handleAddField}
-                    className="flex items-center gap-1 text-teal-600 hover:text-teal-800 transition-colors"
-                  >
-                    <Plus className="h-4 w-4" />
-                    <span>Add Field</span>
-                  </button>
-                  
-                  <button
-                    onClick={createSchema}
-                    disabled={isProcessing || schema.length === 0}
-                    className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 transition-colors text-white py-2 px-4 rounded-lg disabled:bg-teal-300"
-                  >
-                    {isProcessing ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        <span>Creating...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Database className="h-4 w-4" />
-                        <span>Create Template</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-                
-                {schemaId && (
-                  <div className="mt-4 p-3 bg-green-50 border border-green-100 rounded-lg text-green-700 text-sm flex items-center gap-2">
-                    <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0" />
-                    <div>
-                      <strong>Template Created</strong>
-                      <div className="text-xs">ID: {schemaId.substring(0, 10)}...</div>
                     </div>
+                  ) : (
+                    <div className="mb-6">
+                      <div className="flex justify-end mb-6">
+                        <button 
+                          onClick={handleAddField}
+                          className="flex items-center gap-2 text-teal-600 hover:text-teal-800 transition-colors"
+                        >
+                          <Plus className="h-4 w-4" />
+                          <span>Add Field</span>
+                        </button>
+                      </div>
+                      
+                      <div className="grid grid-cols-12 gap-3 mb-3 text-sm font-medium text-gray-600 px-2">
+                        <div className="col-span-4">Field Name</div>
+                        <div className="col-span-3">Data Type</div>
+                        <div className="col-span-4">Description</div>
+                        <div className="col-span-1"></div>
+                      </div>
+                      
+                      {schema.map((field, index) => (
+                        <div key={index} className="grid grid-cols-12 gap-3 mb-3 group">
+                          <input
+                            type="text"
+                            placeholder="e.g. invoice_number"
+                            value={field[0]}
+                            onChange={(e) => handleFieldChange(index, 0, e.target.value)}
+                            className="col-span-4 border border-gray-200 rounded-xl p-2.5 text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                          />
+                          <select
+                            value={field[1]}
+                            onChange={(e) => handleFieldChange(index, 1, e.target.value)}
+                            className="col-span-3 border border-gray-200 rounded-xl p-2.5 text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white"
+                          >
+                            {fieldTypes.map((type) => (
+                              <option key={type} value={type}>{type}</option>
+                            ))}
+                          </select>
+                          <input
+                            type="text"
+                            placeholder="Optional description"
+                            value={field[2]}
+                            onChange={(e) => handleFieldChange(index, 2, e.target.value)}
+                            className="col-span-4 border border-gray-200 rounded-xl p-2.5 text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                          />
+                          <button
+                            onClick={() => handleDeleteField(index)}
+                            className="col-span-1 flex items-center justify-center text-gray-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                            title="Delete field"
+                          >
+                            <Trash2 className="h-5 w-5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  
+                  <div className="flex items-center justify-end mt-6 pt-6 border-t border-gray-100">
+                    <button
+                      onClick={createSchema}
+                      disabled={isProcessing || schema.length === 0}
+                      className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 transition-colors text-white py-3 px-6 rounded-xl disabled:bg-teal-300 shadow-sm"
+                    >
+                      {isProcessing ? (
+                        <>
+                          <Loader2 className="h-5 w-5 animate-spin" />
+                          <span>Creating Template...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Database className="h-5 w-5" />
+                          <span>Create Template</span>
+                        </>
+                      )}
+                    </button>
                   </div>
-                )}
+                  
+                  {schemaId && (
+                    <div className="mt-6 p-4 bg-green-50 border border-green-100 rounded-xl text-green-700 flex items-center gap-3 animate-fadeIn">
+                      <CheckCircle className="h-6 w-6 text-green-500 flex-shrink-0" />
+                      <div>
+                        <strong className="font-medium">Template Created Successfully</strong>
+                        <div className="text-sm mt-0.5">Template ID: {schemaId}</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-            
-            {/* Invoice Upload and Processing Panel */}
-            <div className="flex flex-col gap-6">
-              {/* File Upload Section */}
-              <div className="bg-white rounded-xl shadow-md overflow-hidden border border-gray-200">
-                <div className="bg-teal-50 p-4 border-b border-gray-200">
-                  <h2 className="font-medium text-gray-800">Step 2: Upload Invoices</h2>
-                  <p className="text-xs text-gray-500">Select multiple invoice files for batch processing</p>
+            )}
+
+            {/* File Upload (Step 2) */}
+            {activeStep === 2 && (
+              <div className="lg:col-span-12 bg-white rounded-xl shadow-sm overflow-hidden border border-gray-200 animate-fadeIn">
+                <div className="bg-white p-6 border-b border-gray-100">
+                  <div className="flex items-center gap-3 mb-1">
+                    <div className="bg-teal-100 rounded-full p-2 text-teal-700">
+                      <Upload className="h-5 w-5" />
+                    </div>
+                    <h2 className="text-xl font-semibold text-gray-800">Upload Invoice Files</h2>
+                  </div>
+                  <p className="text-gray-500 ml-10">Select invoice files for batch processing</p>
                 </div>
                 
-                <div className="p-4">
+                <div className="p-6">
                   <div 
+                    ref={dropZoneRef}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
                     onClick={triggerFileUpload}
-                    className="mb-4 h-36 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-teal-400 transition-colors bg-gray-50"
+                    className="mb-6 h-64 border-3 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:border-teal-400 hover:bg-teal-50 transition-all duration-200 bg-gray-50 group"
                   >
-                    <Receipt className="h-10 w-10 text-gray-400 mb-2" />
-                    <p className="text-sm text-gray-500">Click to upload invoice files</p>
-                    <p className="text-xs text-gray-400 mt-1">JPG, PNG or PDF</p>
+                    <Upload className="h-16 w-16 text-gray-300 mb-4 group-hover:text-teal-500 transition-colors" />
+                    <h3 className="text-lg font-medium text-gray-700 mb-2 group-hover:text-teal-700 transition-colors">
+                      Drag and drop files here
+                    </h3>
+                    <p className="text-gray-500 text-sm mb-4">or click to browse</p>
+                    <span className="px-4 py-2 bg-white shadow-sm rounded-xl text-sm text-gray-600 border border-gray-200 group-hover:border-teal-200 transition-colors">
+                      Select Files
+                    </span>
                   </div>
                   
                   <input
@@ -493,128 +694,221 @@ export default function BulkImageProcessing() {
                     <button
                       onClick={loadDemoFiles}
                       disabled={isProcessing || files.length > 0}
-                      className="w-full mb-4 flex items-center justify-center gap-2 bg-teal-100 hover:bg-teal-200 transition-colors text-teal-800 py-2 px-4 rounded-lg font-medium disabled:opacity-50"
+                      className="w-full mb-6 flex items-center justify-center gap-2 bg-teal-100 hover:bg-teal-200 transition-colors text-teal-800 py-3 px-6 rounded-xl font-medium disabled:opacity-50"
                     >
-                      <FileText className="h-4 w-4" />
+                      <FileText className="h-5 w-5" />
                       <span>Load Demo Files</span>
                     </button>
                   )}
                   
                   {files.length > 0 && (
-                    <div className="mb-4 p-3 bg-gray-50 border border-gray-200 rounded-lg">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium text-gray-700">Selected Invoices</span>
-                        <span className="text-xs text-gray-500">{files.length} file(s)</span>
+                    <div className="mb-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-medium text-gray-800">Selected Files</h3>
+                        <span className="bg-teal-100 text-teal-800 px-3 py-1 rounded-full text-sm">
+                          {files.length} file(s)
+                        </span>
                       </div>
-                      <div className="max-h-24 overflow-y-auto">
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {files.map((file, index) => (
-                          <div key={index} className="text-xs text-gray-600 mb-1 flex items-center gap-1">
-                            <FileText className="h-3 w-3 text-gray-400" />
-                            <span className="truncate">{file.name}</span>
-                            <span className="text-gray-400">({(file.size / 1024).toFixed(1)} KB)</span>
+                          <div key={index} className="bg-gray-50 border border-gray-200 rounded-xl overflow-hidden flex items-center p-3 group">
+                            <div className="bg-white p-2 rounded-lg">
+                              <FileText className="h-8 w-8 text-gray-400" />
+                            </div>
+                            <div className="ml-3 flex-1 min-w-0">
+                              <p className="text-sm font-medium text-gray-700 truncate">{file.name}</p>
+                              <p className="text-xs text-gray-500">{(file.size / 1024).toFixed(1)} KB</p>
+                            </div>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removeFile(index);
+                              }}
+                              className="p-1.5 ml-2 rounded-full text-gray-400 hover:text-red-500 hover:bg-white opacity-0 group-hover:opacity-100 transition-all"
+                              title="Remove file"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
                           </div>
                         ))}
                       </div>
                     </div>
                   )}
                   
-                  <button
-                    onClick={uploadImages}
-                    disabled={isProcessing || !schemaId || files.length === 0}
-                    className="w-full flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-700 transition-colors text-white py-2 px-4 rounded-lg font-medium disabled:bg-teal-300"
-                  >
-                    {isProcessing ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        <span>Uploading...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="h-4 w-4" />
-                        <span>Upload Files</span>
-                      </>
-                    )}
-                  </button>
+                  <div className="flex items-center justify-end mt-6 pt-6 border-t border-gray-100">
+                    <button
+                      onClick={uploadImages}
+                      disabled={isProcessing || !schemaId || files.length === 0}
+                      className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 transition-colors text-white py-3 px-6 rounded-xl disabled:bg-teal-300 shadow-sm"
+                    >
+                      {isProcessing ? (
+                        <>
+                          <Loader2 className="h-5 w-5 animate-spin" />
+                          <span>Uploading...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="h-5 w-5" />
+                          <span>Upload Files</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
-              
-              {/* Processing Section */}
-              <div className="bg-white rounded-xl shadow-md overflow-hidden border border-gray-200">
-                <div className="bg-teal-50 p-4 border-b border-gray-200">
-                  <h2 className="font-medium text-gray-800">Step 3: Process Invoices</h2>
-                  <p className="text-xs text-gray-500">Extract data according to template</p>
+            )}
+
+            {/* Process Data (Step 3) */}
+            {activeStep === 3 && (
+              <div className="lg:col-span-12 bg-white rounded-xl shadow-sm overflow-hidden border border-gray-200 animate-fadeIn">
+                <div className="bg-white p-6 border-b border-gray-100">
+                  <div className="flex items-center gap-3 mb-1">
+                    <div className="bg-teal-100 rounded-full p-2 text-teal-700">
+                      <Server className="h-5 w-5" />
+                    </div>
+                    <h2 className="text-xl font-semibold text-gray-800">Process Invoices</h2>
+                  </div>
+                  <p className="text-gray-500 ml-10">Extract data from your uploaded invoices</p>
                 </div>
                 
-                <div className="p-4">
-                  <button
-                    onClick={processImages}
-                    disabled={isProcessing || !jobId}
-                    className="w-full flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-700 transition-colors text-white py-2 px-4 rounded-lg font-medium disabled:bg-teal-300"
-                  >
-                    {isProcessing ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        <span>Processing...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Server className="h-4 w-4" />
-                        <span>Extract Data</span>
-                      </>
-                    )}
-                  </button>
-                  
-                  {jobId && !results && (
-                    <div className="mt-4 p-3 bg-teal-50 border border-teal-100 rounded-lg text-teal-700 text-sm flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-teal-500"></div>
-                      <span>Job ready for processing (ID: {jobId.substring(0, 8)}...)</span>
+                <div className="p-6">
+                  <div className="text-center py-8 mb-6">
+                    <Server className="h-16 w-16 text-teal-500 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-800 mb-2">
+                      Ready to Process {files.length} Invoice{files.length !== 1 ? 's' : ''}
+                    </h3>
+                    <p className="text-gray-500 max-w-lg mx-auto mb-8">
+                      Our AI will extract information according to your template. 
+                      This might take a few moments depending on the number of files.
+                    </p>
+                    
+                    <div className="bg-teal-50 border border-teal-100 rounded-xl p-4 max-w-md mx-auto mb-6 text-left">
+                      <h4 className="flex items-center text-teal-800 font-medium mb-2">
+                        <Receipt className="h-5 w-5 mr-2" />
+                        Job Information
+                      </h4>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div className="text-gray-600">Job ID:</div>
+                        <div className="text-teal-800 font-medium">{jobId?.substring(0, 8)}...</div>
+                        <div className="text-gray-600">Files Count:</div>
+                        <div className="text-teal-800 font-medium">{files.length}</div>
+                        <div className="text-gray-600">Template ID:</div>
+                        <div className="text-teal-800 font-medium">{schemaId?.substring(0, 8)}...</div>
+                      </div>
                     </div>
-                  )}
+                  </div>
+                  
+                  <div className="flex items-center justify-center">
+                    <button
+                      onClick={processImages}
+                      disabled={isProcessing || !jobId}
+                      className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 transition-colors text-white py-3 px-8 rounded-xl disabled:bg-teal-300 shadow-sm"
+                    >
+                      {isProcessing ? (
+                        <>
+                          <Loader2 className="h-5 w-5 animate-spin" />
+                          <span>Processing...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Server className="h-5 w-5" />
+                          <span>Extract Data Now</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
-          
-          {/* Results Section */}
-          {results && (
-            <div className="mt-6">
-              <div className="bg-white rounded-xl shadow-md overflow-hidden border border-gray-200 mb-4">
-                <div className="bg-teal-50 p-4 border-b border-gray-200 flex justify-between items-center">
-                  <div>
-                    <h2 className="font-medium text-gray-800">Extracted Invoice Data</h2>
-                    <p className="text-xs text-gray-500">Review and export the processed data</p>
+            )}
+
+            {/* Results View (Step 4) */}
+            {activeStep === 4 && results && (
+              <div className="lg:col-span-12 animate-fadeIn">
+                <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-200 mb-6">
+                  <div className="bg-white p-6 border-b border-gray-100 flex justify-between items-center">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-teal-100 rounded-full p-2 text-teal-700">
+                        <CheckCircle className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <h2 className="text-xl font-semibold text-gray-800">Extraction Results</h2>
+                        <p className="text-gray-500 text-sm">Data extracted from {files.length} invoice(s)</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={downloadResults}
+                      className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm transition-colors shadow-sm"
+                    >
+                      <Download className="h-4 w-4" />
+                      <span>Export to Excel</span>
+                    </button>
+                  </div>
+                  
+                  <div className="p-6 pb-0 flex items-center justify-between">
+                    <h3 className="text-lg font-medium text-gray-800">
+                      Extracted Data <span className="text-sm font-normal text-gray-500">({Object.keys(results).length} records)</span>
+                    </h3>
+                    <span className="text-sm text-gray-500 flex items-center gap-1">
+                      <Edit3 className="h-4 w-4" /> Click any cell to edit
+                    </span>
+                  </div>
+                  
+                  <EditableResultsTable 
+                    results={results} 
+                    jobId={jobId}
+                    onUpdate={(updatedResults) => setResults(updatedResults)}
+                  />
+                </div>
+                
+                <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200 flex justify-between items-center">
+                  <div className="flex items-center gap-2 text-gray-500">
+                    <Clock className="h-5 w-5" />
+                    <span>Job completed successfully</span>
                   </div>
                   <button
-                    onClick={downloadResults}
-                    className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm transition-colors"
+                    onClick={cleanup}
+                    className="flex items-center gap-2 px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl text-sm transition-colors"
                   >
-                    <Download className="h-4 w-4" />
-                    <span>Export to Excel</span>
+                    <RefreshCw className="h-4 w-4" />
+                    <span>Start New Batch</span>
                   </button>
                 </div>
-                <EditableResultsTable 
-                  results={results} 
-                  jobId={jobId}
-                  onUpdate={(updatedResults) => setResults(updatedResults)}
-                />
               </div>
-            </div>
-          )}
+            )}
+          </div>
           
           {/* Status Bar */}
-          {status && (
-            <div className={`mt-6 p-4 rounded-lg border flex items-center gap-3 ${getStatusStyle()}`}>
+          {status && !showToast && (
+            <div className={`mt-6 p-4 rounded-xl border shadow-sm flex items-center gap-3 animate-fadeIn ${getStatusStyle()}`}>
               {getStatusIcon()}
-              <span className="text-sm">{status}</span>
+              <span>{status}</span>
             </div>
           )}
         </div>
       </main>
-      <footer className="py-4 border-t border-gray-200 bg-white mt-auto">
-        <div className="container mx-auto px-4 text-center text-xs text-gray-500">
-          © 2025 Invoice Extraction Pro. All rights reserved.
+      
+      <footer className="py-6 text-center text-sm text-gray-500 border-t border-gray-100 mt-auto">
+        <div className="container mx-auto px-4">
+          <p>© 2025 Invoice Extraction Pro. All rights reserved.</p>
         </div>
       </footer>
+
+      {/* Global styles */}
+      <style jsx global>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.3s ease-out forwards;
+        }
+        
+        /* Add system font stack */
+        html {
+          font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+      `}</style>
     </div>
   );
 }
