@@ -1,4 +1,0 @@
-python-dotenv
-langchain_google_genai
-Flask
-flask_cors
