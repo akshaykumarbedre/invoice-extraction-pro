@@ -19,7 +19,6 @@ from pydantic import BaseModel, Field
 from typing import Any, Dict, List, Union, Optional
 import re
 import pandas as pd
-import tempfile
 import uuid
 from io import BytesIO
 
