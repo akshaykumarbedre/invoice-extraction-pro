@@ -108,7 +108,7 @@ def initialize_model():
 def load_demo_image(image_path):
     """Load demo image from the backend/demo_images folder"""
     try:
-        full_path = os.path.join( "demo_images", image_path)
+        full_path = os.path.join( "backend","demo_images", image_path)
         if os.path.exists(full_path):
             with open(full_path, "rb") as f:
                 return f.read()
@@ -359,7 +359,7 @@ if page == "🗣️ Interactive Chat & Analysis":
         if st.session_state.chat_memory.chat_memory.messages:
             st.subheader("💬 Conversation")
             for message in st.session_state.chat_memory.chat_memory.messages:
-                if hasattr(message, 'content'):
+                if hasattr(message, 'content')  and "Image Description" not in str(message.content) :
                     if "User:" in str(message.content) or isinstance(message, HumanMessage):
                         st.chat_message("user").write(str(message.content))
                     else:
