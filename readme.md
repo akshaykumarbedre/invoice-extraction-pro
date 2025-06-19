@@ -41,12 +41,18 @@ This project enables users to interactively chat with invoice documents and extr
 3. Upload an invoice document and start chatting to extract information.
 
 ## Example Chat
+### Chat with Invoice 
+![1749312007834](https://github.com/user-attachments/assets/11a2cced-0234-4405-be05-1132ff3af10f)
 
-> **User:** Uploads `invoice.pdf`  
-> **User:** What is the total amount due?  
-> **Bot:** The total amount due is $1,250.00  
-> **User:** Who is the vendor?  
-> **Bot:** The vendor is ABC Supplies Ltd.
+###  Data Extracter 
+![1749312007092](https://github.com/user-attachments/assets/b35c5bcb-078f-4f9b-95fb-1c155021fe79)
+![1749312006857](https://github.com/user-attachments/assets/4b5156fb-d106-47f3-a4b9-4fb6e4cc1ef1)
+![1749312007313](https://github.com/user-attachments/assets/e338be33-49a2-490b-8546-9d743f8a30f3)
+![1749312007376](https://github.com/user-attachments/assets/d5e2addb-07aa-4ee7-b18c-6b2fd9b10af5)
+
+
+
+
 
 ## Technologies Used
 
