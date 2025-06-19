@@ -11,6 +11,7 @@ This project enables users to interactively chat with invoice documents and extr
 - **Contextual Understanding:** Handles follow-up questions and context, enabling conversational extraction (e.g., "What’s the due date on the last invoice?").
 - **Export Options:** Export extracted data for use in spreadsheets, databases, or accounting software.
 - **Flexible Deployment:** Can be integrated as a web application, chatbot, or API service.
+- **Streamlit Demo App:** Try out the functionality in your browser without setup using our hosted Streamlit app: [Invoice Extract AI Streamlit Demo](https://invoice-extract-ai.streamlit.app)
 
 ## Getting Started
 
@@ -40,6 +41,14 @@ This project enables users to interactively chat with invoice documents and extr
 2. Open your browser and navigate to the provided local address.
 3. Upload an invoice document and start chatting to extract information.
 
+### Try the Streamlit Demo
+
+If you want to see the app in action without local installation, use the hosted Streamlit version:
+
+👉 [Streamlit Invoice Extract AI Demo](https://invoice-extract-ai.streamlit.app)
+
+No setup required—just upload your invoice and start chatting!
+
 ## Example Chat
 ### Chat with Invoice 
 ![1749312007834](https://github.com/user-attachments/assets/11a2cced-0234-4405-be05-1132ff3af10f)
@@ -50,17 +59,12 @@ This project enables users to interactively chat with invoice documents and extr
 ![1749312007313](https://github.com/user-attachments/assets/e338be33-49a2-490b-8546-9d743f8a30f3)
 ![1749312007376](https://github.com/user-attachments/assets/d5e2addb-07aa-4ee7-b18c-6b2fd9b10af5)
 
-
-
-
-
 ## Technologies Used
 
-- Python (Flask/FastAPI/Streamlit, etc.)
-- NLP Libraries (spaCy, transformers, etc.)
-- OCR (Tesseract, EasyOCR, or similar for image-based PDFs)
-- PDF Parsing Libraries (pdfplumber, PyPDF2, etc.)
-- Frontend: (Streamlit, React, etc. - specify as appropriate)
+- Python (Flask)
+- OCR (Multimodel llm )
+- Framework Libraries (langchain)
+- Frontend: (Streamlit)
 
 ## Contributing
 
