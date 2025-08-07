@@ -76,7 +76,10 @@ def get_image_description(image_file):
     
     message = HumanMessage(
         content=[
-            {"type": "text", "text": "Act as Image Analyst. Analyze and extract insights from images. An expert in visual content interpretation and text Extraction with years of experience in image analysis"},
+            {"type": "text", "text": "You are an expert at reading invoices and extracting all visible information as-is.\n\n"
+                "From the image below, list all invoice details exactly as they appear, without correcting typos, OCR mistakes, or formatting issues.\n"
+                "Output everything in plain, detailed text — no summaries, no corrections, but formatting.\n"
+                "Preserve the original text, layout order, and any errors in the invoice."},
             {
                 "type": "image_url",
                 "image_url": {"url": f"data:image/jpeg;base64,{image_data}"},
@@ -126,7 +129,7 @@ def get_conversation_chain(session_id):
         prompt=prompt,
         memory=memory,
     )
-    
+        
     conversation_chains[session_id] = (chain, memory)
     return chain, memory
 

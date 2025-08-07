@@ -45,7 +45,7 @@ export default function Home() {
   // Fetch existing conversation if available
   const fetchExistingConversation = async (id) => {
     try {
-      const response = await fetch(`http://localhost:5000/get_conversation?session_id=${id}`);
+      const response = await fetch(`http://127.0.0.1:5000/get_conversation?session_id=${id}`);
       if (response.ok) {
         const data = await response.json();
         if (data.history && data.history.length > 0) {
@@ -132,7 +132,7 @@ export default function Home() {
     formData.append('session_id', sessionId);
 
     try {
-      const response = await fetch('http://localhost:5000/upload_image', {
+      const response = await fetch('http://127.0.0.1:5000/upload_image', {
         method: 'POST',
         body: formData,
       });
@@ -193,7 +193,7 @@ export default function Home() {
     setIsLoading(true);
     
     try {
-      const response = await fetch('http://localhost:5000/chat', {
+      const response = await fetch('http://127.0.0.1:5000/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -258,7 +258,7 @@ export default function Home() {
       setIsLoading(true);
       
       try {
-        await fetch('http://localhost:5000/reset', {
+        await fetch('http://127.0.0.1:5000/reset', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

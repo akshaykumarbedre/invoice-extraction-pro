@@ -214,7 +214,7 @@ export default function BulkImageProcessing() {
       setStatus('Creating schema...');
       setStatusType('info');
       
-      const response = await fetch('http://localhost:5000/create_schema', {
+      const response = await fetch('http://127.0.0.1:5000/create_schema', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ schema })
@@ -260,7 +260,7 @@ export default function BulkImageProcessing() {
       formData.append('schema_id', schemaId);
       files.forEach(file => formData.append('files[]', file));
 
-      const response = await fetch('http://localhost:5000/upload_images', {
+      const response = await fetch('http://127.0.0.1:5000/upload_images', {
         method: 'POST',
         body: formData
       });
@@ -294,7 +294,7 @@ export default function BulkImageProcessing() {
       setStatus('Processing images...');
       setStatusType('info');
       
-      const response = await fetch('http://localhost:5000/process_images', {
+      const response = await fetch('http://127.0.0.1:5000/process_images', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ job_id: jobId })
@@ -325,7 +325,7 @@ export default function BulkImageProcessing() {
   // Download results
   const downloadResults = () => {
     if (jobId) {
-      window.location.href = `http://localhost:5000/download_excel/${jobId}`;
+      window.location.href = `http://127.0.0.1:5000/download_excel/${jobId}`;
       displayToast('Downloading Excel file...', 'success');
     }
   };
@@ -341,7 +341,7 @@ export default function BulkImageProcessing() {
       setStatus('Resetting workspace...');
       setStatusType('info');
       
-      const response = await fetch('http://localhost:5000/cleanup', {
+      const response = await fetch('http://127.0.0.1:5000/cleanup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ job_id: jobId, schema_id: schemaId })

@@ -23,7 +23,7 @@ const EditableResultsTable = ({ results, jobId, onUpdate }) => {
 
   const handleSaveChanges = async () => {
     try {
-      const response = await fetch('http://localhost:5000/update_results', {
+      const response = await fetch('http://127.0.0.1:5000/update_results', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -45,7 +45,7 @@ const EditableResultsTable = ({ results, jobId, onUpdate }) => {
 
   const downloadExcel = () => {
     if (jobId) {
-      window.location.href = `http://localhost:5000/download_excel/${jobId}`;
+      window.location.href = `http://127.0.0.1:5000/download_excel/${jobId}`;
     }
   };
 
